@@ -1,1 +1,48 @@
-test
+# Gizlilik Politikası
+
+Son güncelleme: 18.05.2026
+
+Bir Gönülden Bir Gönüle uygulaması kullanıcı gizliliğine önem verir. Bu uygulama kullanıcıdan kişisel veri toplamaz, saklamaz veya üçüncü taraflarla paylaşmaz.
+
+## Toplanan Veriler
+
+Uygulama kapsamında:
+
+* Ad
+* Soyad
+* Telefon numarası
+* E-posta adresi
+* Konum bilgisi
+* Kimlik bilgileri
+
+gibi herhangi bir kişisel veri talep edilmez veya saklanmaz.
+
+## İnternet Kullanımı
+
+Uygulama bazı içeriklerin görüntülenmesi veya güncellenmesi amacıyla internet bağlantısı kullanabilir. Ancak kullanıcıya ait kişisel bilgiler toplanmaz.
+
+## Üçüncü Taraf Hizmetleri
+
+Uygulama aşağıdaki üçüncü taraf servisleri kullanabilir:
+
+* Google Play Hizmetleri
+
+Bu servislerin kendi gizlilik politikaları geçerlidir.
+
+## Çocukların Gizliliği
+
+Uygulama doğrudan çocuklara yönelik veri toplamaz.
+
+## Güvenlik
+
+Kullanıcı verisi saklanmadığı için özel veri güvenliği riski minimum seviyededir.
+
+## Değişiklikler
+
+Bu gizlilik politikası gerektiğinde güncellenebilir. Güncel sürüm uygulama sayfasında yayınlanır.
+
+## İletişim
+
+Herhangi bir soru için:
+
+E-posta: fthh3437@gmail.com
