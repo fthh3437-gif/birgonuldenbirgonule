@@ -703,7 +703,7 @@ Ilahi(
   title: "GÖNLÜMÜN SULTANI İHRAMCIZADE",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Kalb_m_n_Sultan_hramc_zade_Gonlumun_Sultan_hramc_zade.mp3",
   lyricsPath: "assets/text/14_GONLUMUN_SULTANI_IHRAMCIZADE.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=5joNEy7TLjg&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=21"
 ),
@@ -740,7 +740,7 @@ Ilahi(
   title: "İHRAMCIZADENİN BÜLBÜLÜYÜZ BİZ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/hramc_zaden_n_Bulbbuluyuz_B_z_Mar_fet_Bag_n_n_Sumbuluyuz_B_z.mp3",
   lyricsPath: "assets/text/18_IHRAMCIZADENIN_BULBULUYUZ_BIZ.txt",
 ),
 Ilahi(
@@ -921,7 +921,7 @@ Ilahi(
   title: "GELİN HAKKIN DERGAHINA GİDELİM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gel_n_Hakk_n_Dergah_na_G_del_m_Gel_n_Gonul_Dergah_na_G_del_m.mp3",
   lyricsPath: "assets/text/38_GELIN_HAKKIN_DERGAHINA_GIDELIM.txt",
 ),
 Ilahi(
@@ -930,7 +930,7 @@ Ilahi(
   title: "DEMİ BU DERGAHIN DEMİ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Dem_Bu_Dergah_n_Dem_.mp3",
   lyricsPath: "assets/text/39_DEMI_BU_DERGAHIN_DEMI.txt",
 ),
 Ilahi(
@@ -948,7 +948,7 @@ Ilahi(
   title: "AŞIKLAR BADEYİ YARİNDEN İÇER",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/As_klar_Badey_Yar_nden_cer_Derv_sler_Badey_P_r_nden_cer.mp3",
   lyricsPath: "assets/text/41_ASIKLAR_BADEYI_YARINDEN_ICER.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=WzRQ65XgJlk&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=10"
 ),
@@ -958,7 +958,7 @@ Ilahi(
   title: "GÖNLÜMDESİN YA MUHAMMED",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Kalb_mdes_n_Ya_Muhammed_Gonlumdes_n_Ya_Muhammed.mp3",
   lyricsPath: "assets/text/42_GONLUMDESIN_YA_MUHAMMED.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=_oQmgeEq4Ow&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=2"
 ),
@@ -1050,7 +1050,7 @@ Ilahi(
   title: "TANI DERVİŞANI TANI HOR GÖRME SAKIN ONU",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Tan_Derv_s_An_Tan_Hor_Gorme_Sak_n_Han_.mp3",
   lyricsPath: "assets/text/52_TANI_DERVISHANI_TANI_HOR_GORME_SAKIN_ONU.txt",
 ),
 Ilahi(
@@ -1140,7 +1140,7 @@ Ilahi(
   title: "BİZİ GAFİL SANMA BİZİ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_z_Gaf_l_Sanman_B_z_.mp3",
   lyricsPath: "assets/text/62_BIZI_GAFIL_SANMA_BIZI.txt",
 ),
 Ilahi(
@@ -1158,7 +1158,7 @@ Ilahi(
   title: "AŞKINI VER ŞEVKİNİ VER",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ask_n_Ver_sevk_n_Ver.mp3",
   lyricsPath: "assets/text/64_ASKINI_VER_SEVKINI_VER.txt",
 ),
 Ilahi(
@@ -1167,7 +1167,7 @@ Ilahi(
   title: "GEL GÖR BENİ AŞK NEYLEDİ GÖR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gor_B_z_Ask_Neyled_Gor.mp3",
   lyricsPath: "assets/text/65_GEL_GOR_BENI_ASK_NEYLEDI_GOR.txt",
 ),
 Ilahi(
@@ -1464,7 +1464,7 @@ Ilahi(
   title: "BURA BÜLBÜL YERİ BURA GÜL YERİ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Bura_Bulbul_Yer_Bura_Gul_Yer_.mp3",
   lyricsPath: "assets/text/90_BURA_BULBUL_YERI_BURA_GUL_YERI.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=M_jF55jbncA&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF"
 ),
@@ -1547,7 +1547,7 @@ Ilahi(
   title: "ARININ KADRİNİ BAL OLAN BİLİR BÜLBÜLÜN KADRİNİ GÜL OLAN BİLİR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ar_n_n_Kadr_n_Bal_Olan_B_l_r_As_g_n_Kadr_n_Hal_Olan_B_l_r_Bulbulun_Kadr_n_Gul_Olan_B_l_r.mp3",
   lyricsPath: "assets/text/99_ARININ_KADRINI_BAL_OLAN_BILIR_BULBULUN_KADRINI_GUL_OLAN_BILIR.txt",
 ),
 Ilahi(
@@ -1736,7 +1736,7 @@ Ilahi(
   title: "KARAR VER GÖNÜLDEN HAKKA GİDELİM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Karar_Ver_Gonulden_Hakka_G_del_m_Haber_Ver_Gonulden_Hakka_G_del_m.mp3",
   lyricsPath: "assets/text/120_KARAR_VER_GONULDEN_HAKKA_GIDELIM.txt",
 ),
 Ilahi(
@@ -1889,7 +1889,7 @@ Ilahi(
   title: "BİR AŞIĞIN GÖNLÜNE GEL",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_r_Murs_d_n_Gonlune_Gel_B_r_Ar_f_n_Gonlune_Gel.mp3",
   lyricsPath: "assets/text/137_BIR_ASIGIN_GONLUNE_GEL.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=ZWXsjpQQ3y4&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=5"
 ),
@@ -1899,7 +1899,7 @@ Ilahi(
   title: "OTUR HUZUR İLE DUR HUZUR İLE",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Otur_Huzur_le_Dur_Huzur_le.mp3",
   lyricsPath: "assets/text/138_OTUR_HUZUR_ILE_DUR_HUZUR_ILE.txt",
 ),
 Ilahi(
@@ -1908,7 +1908,7 @@ Ilahi(
   title: "DİLLER İLHAM SÖYLETİR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ask_n_Esrar_Boyled_r_D_l_n_lham_Soyled_r.mp3",
   lyricsPath: "assets/text/139_DILLER_ILHAM_SOYLETIR.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=z5x01i_9yuI&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=7"
 ),
@@ -1918,7 +1918,7 @@ Ilahi(
   title: "GÖNÜL UYUMAZ UYUMAZ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gonul_Uyumaz_Uyumaz.mp3",
   lyricsPath: "assets/text/140_GONUL_UYUMAZ_UYUMAZ.txt",
 ),
 Ilahi(
@@ -1927,7 +1927,7 @@ Ilahi(
   title: "YANAR AŞKTAN ÖZÜM AĞLAR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gonul_Agla_Gozum_Agla_Yanar_cten_ozum_Aglar.mp3",
   lyricsPath: "assets/text/141_YANAR_ASKTAN_OZUM_AGLAR.txt",
 ),
 Ilahi(
@@ -2126,7 +2126,7 @@ Ilahi(
   title: "BEN ALLAH DEMEYİM YA NE DEYİM YA",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ben_Allah_Demey_m_ya_Ne_dey_m_Ya_.mp3",
   lyricsPath: "assets/text/163_BEN_ALLAH_DEMEYIM_YA_NE_DEYIM_YA.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=coOUpdE3uKA&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=22"
 ),
@@ -2190,7 +2190,7 @@ Ilahi(
   title: "GÖNÜL AYNASINI SİL DE BERİ GEL",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gel_su_Kalb_n_Aynas_n_S_lel_m_Gel_su_Gonlun_Aynas_n_S_lel_m.mp3",
   lyricsPath: "assets/text/170_GONUL_AYNASINI_SIL_DE_BERI_GEL.txt",
 ),
 Ilahi(
@@ -2199,7 +2199,7 @@ Ilahi(
   title: "BİZİM GÖNÜLLERDEN HABERİMİZ VAR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_z_m_Gonullerden_Haber_m_z_Var.mp3",
   lyricsPath: "assets/text/171_BIZIM_GONULLERDEN_HABERIMIZ_VAR.txt",
 ),
 Ilahi(
@@ -2381,7 +2381,7 @@ Ilahi(
   title: "BANA GÖNÜL DERDİ DÜŞTÜ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Bana_Gonul_Derd_Dustu_Bana_Gonul_Hal_Dustu.mp3",
   lyricsPath: "assets/text2/6_BANA_GONUL_DERDI_DUSTU.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=ytu9vfuQhd4&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=16"
 ),
@@ -2391,7 +2391,7 @@ Ilahi(
   title: "SEN GÜL OL DA BÜLBÜLÜNÜ UNUTMA",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Sen_Gul_Ol_da_Bulbulunu_Unutma.mp3",
   lyricsPath: "assets/text2/7_SEN_GUL_OL_DA_BULBULUNU_UNUTMA.txt",
 ),
 Ilahi(
@@ -2400,7 +2400,7 @@ Ilahi(
   title: "BENİ KULLARINA BİLEN BİLDİRSİN",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ben_Kullar_na_B_len_B_ld_rs_n_.mp3",
   lyricsPath: "assets/text2/8_BENI_KULLARINA_BILEN_BILDIRSIN.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=V1X0FWCJlvo&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=9"
 ),
@@ -2410,7 +2410,7 @@ Ilahi(
   title: "BU SENİN GÖNLÜNE NE OLDU SENİN",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Bu_sen_n_Gonlune_Ne_oldu_Sen_n_.mp3",
   lyricsPath: "assets/text2/9_BU_SENIN_GONLUNE_NE_OLDU_SENIN.txt",
 ),
 Ilahi(
@@ -2437,7 +2437,7 @@ Ilahi(
   title: "ALEMDE GÜNAHKAR BEN BENİ BULDUM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Alemde_Gunahkar_Ben_Ben_Gordum.mp3",
   lyricsPath: "assets/text2/12_ALEMDE_GUNAHKAR_BEN_BENI_BULDUM.txt",
 ),
 Ilahi(
@@ -2581,7 +2581,7 @@ Ilahi(
   title: "BİLMEM Kİ SEN NESİN GÖNÜL",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_lmem_k_Sen_Nes_n_Gonul.mp3",
   lyricsPath: "assets/text2/28_BILMEMKI_SEN_NESIN_GONUL.txt",
 ),
 Ilahi(
@@ -2590,7 +2590,7 @@ Ilahi(
   title: "HERGÜN BULUNURDA BUGÜN BULUNMAZ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Hergun_Bulunurda_Bugun_Bulunmaz.mp3",
   lyricsPath: "assets/text2/29_HERGUN_BULUNURDA_BUGUN_BULUNMAZ.txt",
 ),
 Ilahi(
@@ -2644,7 +2644,7 @@ Ilahi(
   title: "BEN NE DİYEM NE SÖYLEYEM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Ben_Ne_D_yem_Ne_Soyleyem.mp3",
   lyricsPath: "assets/text2/34_BEN_NE_DIYEM_NE_SOYLEYEM.txt",
 ),
 Ilahi(
@@ -3023,7 +3023,7 @@ Ilahi(
   title: "BİZİ ANLAMAZ ANLAMAZ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_z_Anlamaz_Anlamaz.mp3",
   lyricsPath: "assets/text2/569_BIZI_ANLAMAZ_ANLAMAZ.txt",
 ),
 Ilahi(
@@ -3041,7 +3041,7 @@ Ilahi(
   title: "BİLDİM GÖNÜL ALEMİNDE",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Buldur_Gonul_Alem_nde.mp3",
   lyricsPath: "assets/text2/573_BILDIM_GONUL_ALEMINDE.txt",
 ),
 Ilahi(
@@ -3050,7 +3050,7 @@ Ilahi(
   title: "BIRAK BENİ DEMLENEYİM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/B_rak_Ben_Derlemey_n_Allah_c_n.mp3",
   lyricsPath: "assets/text2/574_BIRAK_BENI_DEMLENEYIM.txt",
 ),
 Ilahi(
@@ -3239,7 +3239,7 @@ Ilahi(
   title: "GEL GÖNÜL EVİNE DERTLEŞELİM GEL",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gel_Gonul_Ev_ne_Dertlesel_m_Gel.mp3",
   lyricsPath: "assets/text2/630_GEL_GONUL_EVINE_DERTLESELIM_GEL.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=1gg55qq0ufM&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=24",
 ),
@@ -3486,7 +3486,7 @@ Ilahi(
   title: "GÖNÜL BİR DOST BULDU BUGÜN",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gonul_B_r_Dost_Buldu_Bugun.mp3",
   lyricsPath: "assets/text2/134_GONUL_BIR_DOST_BULDU_BUGUN.txt",
 ),
 Ilahi(
@@ -3495,7 +3495,7 @@ Ilahi(
   title: "ALLAH DERLER BİR MECLİSE UĞRADIM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Allah_Derler_B_r_Mecl_se_Ugrad_Al_m_Derler_B_r_Mecl_se_Ugrad_Sohbet_Derler_B_r_Mecl_se_Ugrad_.mp3",
   lyricsPath: "assets/text2/135_ALLAH_DERLER_BIR_MECLISE_UGRADIM.txt",
 ),
 Ilahi(
@@ -3546,10 +3546,10 @@ Ilahi(
 Ilahi(
   id: 135,
   ciltNo: 2,
-  title: "GÖNÜL EĞLENMEZİ EĞLENMEZİ",
+  title: "GÖNÜL EĞLENMEZ EĞLENMEZ",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gonul_Eylenmez_Eylenmez.mp3",
   lyricsPath: "assets/text2/141_GONUL_EGLENMEZ_EGLENMEZ.txt",
 ),
 Ilahi(
@@ -3704,7 +3704,7 @@ Ilahi(
   title: "DERDİ BENİM DERDİMDENDİR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Derd_Ben_m.mp3",
   lyricsPath: "assets/text2/161_DERDI_BENIM_DERDIMDENDIR.txt",
   youtubeUrl: "https://www.youtube.com/watch?v=iFJ5mQCex4E&list=PLpgrqRH2RxmlNcso4VjnLXmn4ZjK24XZF&index=13"
 ),
@@ -3822,7 +3822,7 @@ Ilahi(
   title: "ÇAĞLA DERYA ÇAĞLA HAKKA GİDELİM",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Hakka_G_del_m.mp3",
   lyricsPath: "assets/text2/175_CAGLA_DERYA_CAGLA_HAKKA_GIDELIM.txt",
 ),
 Ilahi(
@@ -4959,7 +4959,7 @@ Ilahi(
   title: "DEVRANIMIZ GÖNÜLDEDİR",
   author: "Bünyamin Yıldırım Efendi Hazretleri",
   category: "İlahi",
-  audioPath: "null",
+  audioPath: "assets/audio/Gonulded_r.mp3",
   lyricsPath: "assets/text3/109_DEVRANIMIZ_GONULDEDIR.txt",
 ),
 Ilahi(
@@ -6463,7 +6463,7 @@ class _ControlButton extends StatelessWidget {
 
 // ─────────────────────────────────────────────
 // YARDIMCI WIDGET'LAR
-// ─────────────────────────────────────────────
+// ──────────────────────────S───────────────────
 class _InfoChip extends StatelessWidget {
   final String label;
   final bool isDark;
