@@ -51,6 +51,10 @@
 	<true/>
 <key>NSMicrophoneUsageDescription</key>
 <string>Bu uygulama ses özelliklerini kullanmak için mikrofon erişimi gerektirebilir.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -1,9 +1,22 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'dart:io' show Platform, File;
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 // ─────────────────────────────────────────────
 // TEMA & RENK PALETİ
 // ─────────────────────────────────────────────
@@ -24,19 +37,283 @@ class AppColors {
   static const darkTextSecondary = Color(0xFF9CA3AF);
 }
 
-void main() {
+
+// ─────────────────────────────────────────────
+// UYGULAMA AYARLARI (Tema + Yazı Boyutu)
+// ─────────────────────────────────────────────
+class AppSettings extends ChangeNotifier {
+  static final AppSettings instance = AppSettings._internal();
+  factory AppSettings() => instance;
+  AppSettings._internal();
+
+  ThemeMode themeMode = ThemeMode.system;
+  double fontScale = 1.0;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeStr = prefs.getString('themeMode') ?? 'system';
+    themeMode = themeStr == 'light'
+        ? ThemeMode.light
+        : themeStr == 'dark'
+            ? ThemeMode.dark
+            : ThemeMode.system;
+    fontScale = prefs.getDouble('fontScale') ?? 1.0;
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'themeMode',
+      mode == ThemeMode.light
+          ? 'light'
+          : mode == ThemeMode.dark
+              ? 'dark'
+              : 'system',
+    );
+  }
+
+  Future<void> setFontScale(double scale) async {
+    fontScale = scale;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('fontScale', scale);
+  }
+}
+
+// ─────────────────────────────────────────────
+// UYGULAMA GÜNCELLEME KONTROLÜ
+// ─────────────────────────────────────────────
+// ÖNEMLİ: pubspec.yaml'daki "version:" değerini her güncellediğinde
+// buradaki kAppVersion değerini de AYNI şekilde güncelle.
+const String kAppVersion = "1.6.0";
+
+class UpdateChecker {
+  static const String _updateInfoUrl =
+      "https://fthh3437-gif.github.io/birgonuldenbirgonule/update.json";
+
+  static Future<void> check(BuildContext context) async {
+    try {
+      final response = await http
+          .get(Uri.parse(_updateInfoUrl))
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return;
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final latestVersion = data['latest_version'] as String? ?? kAppVersion;
+      final forceUpdate = data['force_update'] as bool? ?? false;
+      final message = data['message'] as String? ??
+          "Uygulamanın yeni bir sürümü mevcut. Yeni özelliklerden faydalanmak için güncellemenizi öneririz.";
+      final androidUrl = data['android_url'] as String? ?? "";
+      final iosUrl = data['ios_url'] as String? ?? "";
+
+      if (_compareVersions(latestVersion, kAppVersion) <= 0) return;
+      if (!context.mounted) return;
+
+      final storeUrl = Platform.isIOS ? iosUrl : androidUrl;
+
+      showDialog(
+        context: context,
+        barrierDismissible: !forceUpdate,
+        builder: (ctx) => PopScope(
+          canPop: !forceUpdate,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.system_update_rounded, color: AppColors.primary),
+                const SizedBox(width: 10),
+                const Text("Güncelleme Mevcut"),
+              ],
+            ),
+            content: Text(message),
+            actions: [
+              if (!forceUpdate)
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Daha Sonra"),
+                ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (storeUrl.isNotEmpty) {
+                    await launchUrl(
+                      Uri.parse(storeUrl),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                  if (!forceUpdate && ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text("Şimdi Güncelle"),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      // İnternet yoksa veya sunucuya ulaşılamıyorsa sessizce geç,
+      // uygulama normal şekilde açılmaya devam etsin.
+    }
+  }
+
+  static int _compareVersions(String a, String b) {
+    final pa = a.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final pb = b.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final len = pa.length > pb.length ? pa.length : pb.length;
+    for (var i = 0; i < len; i++) {
+      final va = i < pa.length ? pa[i] : 0;
+      final vb = i < pb.length ? pb[i] : 0;
+      if (va != vb) return va.compareTo(vb);
+    }
+    return 0;
+  }
+}
+
+// ─────────────────────────────────────────────
+// GÜNLÜK BİLDİRİM SERVİSİ
+// ─────────────────────────────────────────────
+class NotificationService {
+  static final NotificationService instance = NotificationService._internal();
+  factory NotificationService() => instance;
+  NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  static const int _dailyNotificationId = 1001;
+
+  Future<void> init() async {
+    tz_data.initializeTimeZones();
+
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosInit = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    const initSettings = InitializationSettings(android: androidInit, iOS: iosInit);
+    await _plugin.initialize(settings: initSettings);
+
+    // Kayıtlı ayar varsa bildirim planını yeniden kur
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('dailyReminderEnabled') ?? false;
+    if (enabled) {
+      final hour = prefs.getInt('dailyReminderHour') ?? 9;
+      final minute = prefs.getInt('dailyReminderMinute') ?? 0;
+      await scheduleDaily(hour, minute);
+    }
+  }
+
+  Future<bool> requestPermission() async {
+    if (!(Platform.isAndroid || Platform.isIOS)) return false;
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      final granted = await androidImpl.requestNotificationsPermission();
+      return granted ?? true;
+    }
+    final iosImpl = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (iosImpl != null) {
+      final granted = await iosImpl.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? true;
+    }
+    return true;
+  }
+
+  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    return scheduled;
+  }
+
+  Future<void> scheduleDaily(int hour, int minute) async {
+    if (!(Platform.isAndroid || Platform.isIOS)) return;
+    await _plugin.zonedSchedule(
+      id: _dailyNotificationId,
+      title: 'Bir Gönülden Bir Gönüle',
+      body: 'Günün ilahisi sizi bekliyor. Kalbinize huzur katmak için uygulamayı açın.',
+      scheduledDate: _nextInstanceOfTime(hour, minute),
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'daily_reminder_channel',
+          'Günlük Hatırlatma',
+          channelDescription: 'Günün ilahisi hatırlatması',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dailyReminderEnabled', true);
+    await prefs.setInt('dailyReminderHour', hour);
+    await prefs.setInt('dailyReminderMinute', minute);
+  }
+
+  Future<void> cancelDaily() async {
+    if (!(Platform.isAndroid || Platform.isIOS)) return;
+    await _plugin.cancel(id: _dailyNotificationId);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dailyReminderEnabled', false);
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppSettings.instance.load();
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.fkt.gonulgonule.channel.audio',
+    androidNotificationChannelName: 'İlahi Çalma',
+    androidNotificationOngoing: true,
+  );
+  if (Platform.isAndroid || Platform.isIOS) {
+    await NotificationService.instance.init();
+  }
   runApp(const IlahiApp());
 }
 
-class IlahiApp extends StatelessWidget {
+class IlahiApp extends StatefulWidget {
   const IlahiApp({super.key});
+
+  @override
+  State<IlahiApp> createState() => _IlahiAppState();
+}
+
+class _IlahiAppState extends State<IlahiApp> {
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.addListener(_onSettingsChanged);
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bünyamin Efendi İlahileri',
-      themeMode: ThemeMode.system,
+      themeMode: AppSettings.instance.themeMode,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -141,6 +418,14 @@ class IlahiApp extends StatelessWidget {
           ),
         ),
       ),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(AppSettings.instance.fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: const MainPage(),
     );
   }
@@ -320,229 +605,6 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage> {
     );
   }
 }
-// ─────────────────────────────────────────────
-// İLAHİ & SOHBETLER SAYFASI (YouTube linkleri)
-// ─────────────────────────────────────────────
-class SohbetlerPage extends StatefulWidget {
-  const SohbetlerPage({super.key});
-
-  @override
-  State<SohbetlerPage> createState() => _SohbetlerPageState();
-}
-
-class _SohbetlerPageState extends State<SohbetlerPage> {
-  String _searchText = '';
-  final TextEditingController _searchController = TextEditingController();
-
-  // youtubeUrl'i olan ve "null" olmayan ilahileri filtrele
-  List<Ilahi> get _withYoutube => allIlahiler
-      .where((i) =>
-          i.youtubeUrl != null &&
-          i.youtubeUrl!.isNotEmpty &&
-          i.youtubeUrl != 'null' &&
-          i.title.toLowerCase().contains(_searchText.toLowerCase()))
-      .toList();
-
-  Future<void> _openYoutube(String url) async {
-  final uri = Uri.parse(url);
-  try {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Hata: $e'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-    }
-  }
-}
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final list = _withYoutube;
-
-    return Column(
-      children: [
-        // Arama
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (v) => setState(() => _searchText = v),
-            decoration: InputDecoration(
-              hintText: 'İlahi veya sohbet ara...',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              suffixIcon: _searchText.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchText = '');
-                      },
-                    )
-                  : null,
-            ),
-          ),
-        ),
-        // Sayı
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
-          child: Row(
-            children: [
-              Text(
-                '${list.length} içerik',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Liste
-        Expanded(
-          child: list.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.play_circle_outline_rounded,
-                          size: 72,
-                          color: isDark
-                              ? AppColors.darkTextSecondary.withOpacity(0.3)
-                              : AppColors.textSecondary.withOpacity(0.2)),
-                      const SizedBox(height: 16),
-                      Text(
-                        'İçerik bulunamadı',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  itemCount: list.length,
-                  itemBuilder: (context, index) {
-                    final ilahi = list[index];
-                    return _SohbetCard(
-                      ilahi: ilahi,
-                      index: index + 1,
-                      isDark: isDark,
-                      onTap: () => _openYoutube(ilahi.youtubeUrl ?? ""),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SohbetCard extends StatelessWidget {
-  final Ilahi ilahi;
-  final int index;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _SohbetCard({
-    required this.ilahi,
-    required this.index,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? const Color(0xFF2A3545)
-              : const Color(0xFFF0F0F0),
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Row(
-            children: [
-              // Sol taraftaki YouTube Oynatma İkonu
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.play_circle_filled_rounded,
-                    color: Colors.red, size: 28),
-              ),
-              const SizedBox(width: 12),
-              // Başlık + Cilt Bilgisi
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      ilahi.title,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? AppColors.darkTextPrimary
-                            : AppColors.textPrimary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Cilt ${ilahi.ciltNo}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? AppColors.darkTextSecondary
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Sağ taraftaki mükerrer YouTube rozeti kaldırıldı.
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// MODEL
-// ─────────────────────────────────────────────
 class Ilahi {
   final int id;
   final int ciltNo;
@@ -565,6 +627,18 @@ class Ilahi {
   });
 
   bool get hasAudio => audioPath != 'null' && audioPath.isNotEmpty;
+}
+
+// ─────────────────────────────────────────────
+// GÜNÜN İLAHİSİ
+// ─────────────────────────────────────────────
+Ilahi? getHymnOfTheDay() {
+  final withAudio = allIlahiler.where((i) => i.hasAudio).toList();
+  final pool = withAudio.isNotEmpty ? withAudio : allIlahiler;
+  if (pool.isEmpty) return null;
+  final now = DateTime.now();
+  final dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays;
+  return pool[dayOfYear % pool.length];
 }
 
 // ─────────────────────────────────────────────
@@ -4985,6 +5059,364 @@ Ilahi(
 // ─────────────────────────────────────────────
 // GLOBAL SES SERVİSİ — Sayfa geçişlerinde ses kontrolü
 // ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// AYARLAR SAYFASI
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// HAKKINDA / GERİ BİLDİRİM SAYFASI
+// ─────────────────────────────────────────────
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
+
+  Future<void> _sendFeedback() async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'fktdev@gmail.com',
+      query: 'subject=${Uri.encodeComponent("Bir Gönülden Bir Gönüle - Geri Bildirim")}'
+          '&body=${Uri.encodeComponent("Merhaba,\n\nUygulama sürümü: $kAppVersion\n\n")}',
+    );
+    await launchUrl(uri);
+  }
+
+  Future<void> _openStore() async {
+    final url = Platform.isIOS
+        ? "https://apps.apple.com/app/id6796043765"
+        : "https://play.google.com/store/apps/details?id=com.fkt.birgonuldenbirgonule";
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openPrivacy() async {
+    await launchUrl(
+      Uri.parse("https://fthh3437-gif.github.io/birgonuldenbirgonule/privacy.html"),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(title: const Text("Hakkında")),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.asset(
+                "assets/images/bunyamin_efendi.jpg",
+                width: 90,
+                height: 90,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 90,
+                  height: 90,
+                  color: AppColors.primary.withOpacity(0.15),
+                  child: const Icon(Icons.person, size: 40, color: AppColors.primary),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              "Bir Gönülden Bir Gönüle",
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              "Sürüm $kAppVersion",
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.mail_outline_rounded, color: AppColors.primary),
+                  title: const Text("Geri bildirim gönder"),
+                  subtitle: const Text("Öneri, hata bildirimi veya eksik ilahi"),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _sendFeedback,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.star_outline_rounded, color: AppColors.primary),
+                  title: const Text("Bizi değerlendirin"),
+                  subtitle: const Text("Mağazada puan verin"),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _openStore,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined, color: AppColors.primary),
+                  title: const Text("Gizlilik Politikası"),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: _openPrivacy,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              "Bünyamin Yıldırım Efendi Hazretleri'nin\nilahilerini yaşatmak niyetiyle.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  bool _reminderEnabled = false;
+  int _reminderHour = 9;
+  int _reminderMinute = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminderSettings();
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _reminderEnabled = prefs.getBool('dailyReminderEnabled') ?? false;
+      _reminderHour = prefs.getInt('dailyReminderHour') ?? 9;
+      _reminderMinute = prefs.getInt('dailyReminderMinute') ?? 0;
+    });
+  }
+
+  Future<void> _onReminderToggle(bool value) async {
+    if (value) {
+      final granted = await NotificationService.instance.requestPermission();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Bildirim izni verilmedi. Ayarlardan izin verebilirsiniz.")),
+          );
+        }
+        return;
+      }
+      await NotificationService.instance.scheduleDaily(_reminderHour, _reminderMinute);
+    } else {
+      await NotificationService.instance.cancelDaily();
+    }
+    setState(() => _reminderEnabled = value);
+  }
+
+  Future<void> _pickReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _reminderHour, minute: _reminderMinute),
+    );
+    if (picked != null) {
+      setState(() {
+        _reminderHour = picked.hour;
+        _reminderMinute = picked.minute;
+      });
+      if (_reminderEnabled) {
+        await NotificationService.instance.scheduleDaily(_reminderHour, _reminderMinute);
+      }
+    }
+  }
+
+  String get _reminderTimeLabel {
+    final h = _reminderHour.toString().padLeft(2, '0');
+    final m = _reminderMinute.toString().padLeft(2, '0');
+    return "$h:$m";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(title: const Text("Ayarlar")),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            "GÖRÜNÜM",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                RadioListTile<ThemeMode>(
+                  title: const Text("Sistem"),
+                  value: ThemeMode.system,
+                  groupValue: AppSettings.instance.themeMode,
+                  onChanged: (v) {
+                    if (v != null) {
+                      AppSettings.instance.setThemeMode(v);
+                      setState(() {});
+                    }
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  title: const Text("Açık Tema"),
+                  value: ThemeMode.light,
+                  groupValue: AppSettings.instance.themeMode,
+                  onChanged: (v) {
+                    if (v != null) {
+                      AppSettings.instance.setThemeMode(v);
+                      setState(() {});
+                    }
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  title: const Text("Koyu Tema"),
+                  value: ThemeMode.dark,
+                  groupValue: AppSettings.instance.themeMode,
+                  onChanged: (v) {
+                    if (v != null) {
+                      AppSettings.instance.setThemeMode(v);
+                      setState(() {});
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            "YAZI BOYUTU",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.text_decrease_rounded, size: 18),
+                    Expanded(
+                      child: Slider(
+                        min: 0.85,
+                        max: 1.4,
+                        divisions: 11,
+                        value: AppSettings.instance.fontScale,
+                        label: "${(AppSettings.instance.fontScale * 100).round()}%",
+                        onChanged: (v) {
+                          AppSettings.instance.setFontScale(v);
+                          setState(() {});
+                        },
+                      ),
+                    ),
+                    const Icon(Icons.text_increase_rounded, size: 18),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    "Ör: Bu bir örnek ilahi sözüdür.",
+                    style: TextStyle(
+                      fontSize: 16 * AppSettings.instance.fontScale,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            "GÜNLÜK HATIRLATMA",
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text("Günün ilahisini hatırlat"),
+                  subtitle: const Text("Her gün belirlediğiniz saatte bildirim gönderilir"),
+                  value: _reminderEnabled,
+                  onChanged: _onReminderToggle,
+                ),
+                if (_reminderEnabled) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.access_time_rounded, color: AppColors.primary),
+                    title: const Text("Hatırlatma saati"),
+                    trailing: Text(
+                      _reminderTimeLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    onTap: _pickReminderTime,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AudioService {
   static final AudioService _instance = AudioService._internal();
   factory AudioService() => _instance;
@@ -5018,14 +5450,17 @@ class _MainPageState extends State<MainPage> {
   Set<int> favoriteIds = {};
 
   static const List<String> _pageTitles = [
-  "Hayatı", "Önsöz", "Cilt 1", "Cilt 2", "Cilt 3",
-  "Galeri", "İlahi & Sohbetler", "Favorilerim",
+  "Ana Sayfa", "Hayatı", "Önsöz", "Cilt 1", "Cilt 2", "Cilt 3",
+  "Galeri", "Favorilerim",
   ];
 
   @override
   void initState() {
     super.initState();
     _loadFavorites(); // ← YENİ
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      UpdateChecker.check(context);
+    });
   }
 
   Future<void> _loadFavorites() async {
@@ -5059,15 +5494,15 @@ class _MainPageState extends State<MainPage> {
 
 Widget _buildPage(int index) {
   switch (index) {
-    case 0: return const BiographyPage();
-    case 1: return const PrefacePage();
-    case 2: return IlahiListPage(ciltNo: 1, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
-    case 3: return IlahiListPage(ciltNo: 2, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
-    case 4: return IlahiListPage(ciltNo: 3, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
-    case 5: return const GalleryPage();
-    case 6: return const SohbetlerPage();
+    case 0: return HomePage(favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
+    case 1: return const BiographyPage();
+    case 2: return const PrefacePage();
+    case 3: return IlahiListPage(ciltNo: 1, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
+    case 4: return IlahiListPage(ciltNo: 2, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
+    case 5: return IlahiListPage(ciltNo: 3, favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
+    case 6: return const GalleryPage();
     case 7: return FavoritesPage(favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
-    default: return const BiographyPage();
+    default: return HomePage(favoriteIds: favoriteIds, onFavoriteToggle: toggleFavorite);
   }
 }
   @override
@@ -5110,13 +5545,13 @@ Widget _buildPage(int index) {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _BottomNavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: "Hayatı", selected: _selectedIndex == 0, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 0)),
-  _BottomNavItem(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories_rounded, label: "Önsöz", selected: _selectedIndex == 1, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 1)),
-  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 1", selected: _selectedIndex == 2, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 2)),
-  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 2", selected: _selectedIndex == 3, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 3)),
-  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 3", selected: _selectedIndex == 4, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 4)),
-  _BottomNavItem(icon: Icons.photo_library_outlined, activeIcon: Icons.photo_library_rounded, label: "Galeri", selected: _selectedIndex == 5, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 5)),
-  _BottomNavItem(icon: Icons.play_circle_outline_rounded, activeIcon: Icons.play_circle_rounded, label: "Sohbet", selected: _selectedIndex == 6, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 6)),
+              _BottomNavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: "Ana Sayfa", selected: _selectedIndex == 0, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 0)),
+  _BottomNavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: "Hayatı", selected: _selectedIndex == 1, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 1)),
+  _BottomNavItem(icon: Icons.auto_stories_outlined, activeIcon: Icons.auto_stories_rounded, label: "Önsöz", selected: _selectedIndex == 2, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 2)),
+  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 1", selected: _selectedIndex == 3, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 3)),
+  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 2", selected: _selectedIndex == 4, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 4)),
+  _BottomNavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: "Cilt 3", selected: _selectedIndex == 5, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 5)),
+  _BottomNavItem(icon: Icons.photo_library_outlined, activeIcon: Icons.photo_library_rounded, label: "Galeri", selected: _selectedIndex == 6, selectedColor: sel, unselectedColor: unsel, onTap: () => setState(() => _selectedIndex = 6)),
               ],
           ),
         ),
@@ -5197,8 +5632,9 @@ Widget _buildPage(int index) {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 children: [
-  _drawerTile(0, Icons.person_outline_rounded, Icons.person_rounded, "Hayatı", isDark),
-  _drawerTile(1, Icons.auto_stories_outlined, Icons.auto_stories_rounded, "Önsöz", isDark),
+  _drawerTile(0, Icons.home_outlined, Icons.home_rounded, "Ana Sayfa", isDark),
+  _drawerTile(1, Icons.person_outline_rounded, Icons.person_rounded, "Hayatı", isDark),
+  _drawerTile(2, Icons.auto_stories_outlined, Icons.auto_stories_rounded, "Önsöz", isDark),
   const Padding(
     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     child: Divider(height: 1),
@@ -5215,16 +5651,100 @@ Widget _buildPage(int index) {
       ),
     ),
   ),
-  _drawerTile(2, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 1", isDark),
-  _drawerTile(3, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 2", isDark),
-  _drawerTile(4, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 3", isDark),
+  _drawerTile(3, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 1", isDark),
+  _drawerTile(4, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 2", isDark),
+  _drawerTile(5, Icons.menu_book_outlined, Icons.menu_book_rounded, "Cilt 3", isDark),
   const Padding(
     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     child: Divider(height: 1),
   ),
-  _drawerTile(5, Icons.photo_library_outlined, Icons.photo_library_rounded, "Galeri", isDark),
-  _drawerTile(6, Icons.play_circle_outline_rounded, Icons.play_circle_rounded, "İlahi & Sohbetler", isDark),
+  _drawerTile(6, Icons.photo_library_outlined, Icons.photo_library_rounded, "Galeri", isDark),
   _drawerTile(7, Icons.star_outline_rounded, Icons.star_rounded, "Favorilerim", isDark),
+  const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    child: Divider(height: 1),
+  ),
+  ListTile(
+    leading: Icon(
+      Icons.queue_music_rounded,
+      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+      size: 22,
+    ),
+    title: Text(
+      "Çalma Listesi",
+      style: TextStyle(
+        fontWeight: FontWeight.w500,
+        fontSize: 15,
+        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+      ),
+    ),
+    dense: true,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AllHymnsPlaylistPage(
+            favoriteIds: favoriteIds,
+            onFavoriteToggle: toggleFavorite,
+          ),
+        ),
+      );
+    },
+  ),
+  const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    child: Divider(height: 1),
+  ),
+  ListTile(
+    leading: Icon(
+      Icons.settings_outlined,
+      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+      size: 22,
+    ),
+    title: Text(
+      "Ayarlar",
+      style: TextStyle(
+        fontWeight: FontWeight.w500,
+        fontSize: 15,
+        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+      ),
+    ),
+    dense: true,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SettingsPage()),
+      );
+    },
+  ),
+  ListTile(
+    leading: Icon(
+      Icons.info_outline_rounded,
+      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+      size: 22,
+    ),
+    title: Text(
+      "Hakkında",
+      style: TextStyle(
+        fontWeight: FontWeight.w500,
+        fontSize: 15,
+        color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+      ),
+    ),
+    dense: true,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AboutPage()),
+      );
+    },
+  ),
 ],
               ),
             ),
@@ -5336,6 +5856,323 @@ class _BottomNavItem extends StatelessWidget {
 // ─────────────────────────────────────────────
 // BİYOGRAFİ SAYFASI
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ANA SAYFA
+// ─────────────────────────────────────────────
+class HomePage extends StatefulWidget {
+  final Set<int> favoriteIds;
+  final Function(int) onFavoriteToggle;
+
+  const HomePage({
+    super.key,
+    required this.favoriteIds,
+    required this.onFavoriteToggle,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  void _openIlahi(Ilahi ilahi) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => IlahiDetailPage(
+          ilahi: ilahi,
+          isFavorite: widget.favoriteIds.contains(ilahi.id),
+          onFavoriteToggle: widget.onFavoriteToggle,
+        ),
+      ),
+    );
+  }
+
+  void _openTefeul() {
+    final pool = allIlahiler.where((i) => i.ciltNo == 1 || i.ciltNo == 2 || i.ciltNo == 3).toList();
+    if (pool.isEmpty) return;
+    final random = Random();
+    final ilahi = pool[random.nextInt(pool.length)];
+    _openIlahi(ilahi);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hymnOfTheDay = getHymnOfTheDay();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        // Günün İlahisi
+        if (hymnOfTheDay != null)
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _openIlahi(hymnOfTheDay),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [const Color(0xFF1B3A2A), const Color(0xFF142A1E)]
+                        : [const Color(0xFFE8F5E9), const Color(0xFFF1F8F1)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.wb_sunny_rounded, color: AppColors.primary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "GÜNÜN İLAHİSİ",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            hymnOfTheDay.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
+
+        // Tefeül
+        Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: _openTefeul,
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [const Color(0xFF3A2A1B), const Color(0xFF2A1E14)]
+                      : [const Color(0xFFFFF3E0), const Color(0xFFFFF8F1)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.deepOrange.withOpacity(0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.deepOrange.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.auto_awesome_rounded, color: Colors.deepOrange, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Tefeül",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Kalbinizden geçen bir niyetle dokunun, karşınıza rastgele bir ilahi gelsin.",
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: _openTefeul,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepOrange,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                      label: const Text("Tefeül Çek"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Fotoğraf
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            "assets/images/bunyamin_efendi.jpg",
+            height: 220,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              height: 200,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary.withOpacity(0.2), AppColors.primary.withOpacity(0.05)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Center(
+                child: Icon(Icons.person, size: 80, color: AppColors.primary),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            "Bünyamin Yıldırım (k.s.) Hazretleri",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Önsöz (tam içerik)
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.auto_stories_rounded, color: AppColors.primary, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "ÖNSÖZ",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  "بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيمِ",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "BİSMİLLAHİRRAHMANİRRAHİM",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Her şeyin mutlak sahibi\n"
+                "Allah-u Teâlâ Hazretlerine sonsuz\n"
+                "hamdu senalar olsun.\n\n"
+                "Efendimiz Hazreti Muhammed Mustafa (s.a.v.)'e\n"
+                "sonsuz selatu selamlar olsun.\n\n"
+                "Ve bu selatu selamlar bütün peygamberleri,\n"
+                "velileri ve kıyamete kadar gelecek olan cümle\n"
+                "mü'minleri kuşatsın. Amin.\n\n"
+                "Menbağı Kur'an ve Sünnet olan tasavvufi hayat,\n"
+                "İslâm şeriatını en güzel bir şekilde yaşama\n"
+                "tarzıdır. Bu yolun öğretmenleri; mürşidi kamil,\n"
+                "şeyh, arifi billah adlarıyla bilinen Hak dostlarıdır.\n\n"
+                "İşte bu dostlardan bir tanesinin ilahi feyiz ve\n"
+                "muhabbet ile gönlünden yansıyan beyitlerini\n"
+                "coşkuyla okuyacaksınız.",
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.75,
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+      ],
+    );
+  }
+}
+
 class BiographyPage extends StatelessWidget {
   const BiographyPage({super.key});
 
@@ -5447,10 +6284,10 @@ ElevatedButton.icon(
             "Henüz on altı yaşında olmasına rağmen ezelindeki bu cevheri manada gören şeyhi, "
             "Bünyamin (k.s.)'nin ifadesiyle ömrünün sonuna kadar yapacağı hizmetlere vesile olan "
             "aşk-ı ilahiyi gönlüne nakşetmiştir.\n\n"
-            "Şeyhinin 1989 yılında vefatından sonra manevi bir işaretle İstanbul Esatpaşa'ya yerleşerek "
+            "Şeyhinin 1969 yılında vefatından sonra manevi bir işaretle İstanbul Esatpaşa'ya yerleşerek "
             "orada irşad görevini sürdürmüştür. Anadolu'nun köy ve kasabalarını dolaşarak "
             "emr-i bil marufda bulunmuştur.\n\n"
-            "Evinde 17 Mart 1993 Perşembe günü Rabbi'sine rabıtada iken vuslata ermiş, arkasında "
+            "Evinde 17 Mart 1994 Perşembe günü Rabbi'sine rabıtada iken vuslata ermiş, arkasında "
             "binlerce kalbi onun sevgisiyle dolu, gözü yaşlı müridler bırakmıştır. "
             "Türbesi Ümraniye/Kocatepe Kabristanı'ndadır.",          
             style: TextStyle(
@@ -5569,7 +6406,7 @@ class IlahiListPage extends StatefulWidget {
 
 class _IlahiListPageState extends State<IlahiListPage> {
   String searchText = "";
-  int sortMode = 0; // 0=normal, 1=A-Z, 2=Z-A
+  int sortMode = 0; // 0=normal, 1=A-Z, 2=Z-A, 3=Favoriler önce, 4=Sesli önce
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -5587,8 +6424,25 @@ class _IlahiListPageState extends State<IlahiListPage> {
           ilahi.title.toLowerCase().contains(searchText.toLowerCase());
     }).toList();
 
-    if (sortMode == 1) filtered.sort((a, b) => a.title.compareTo(b.title));
-    if (sortMode == 2) filtered.sort((a, b) => b.title.compareTo(a.title));
+    if (sortMode == 1) {
+      filtered.sort((a, b) => a.title.compareTo(b.title));
+    } else if (sortMode == 2) {
+      filtered.sort((a, b) => b.title.compareTo(a.title));
+    } else if (sortMode == 3) {
+      filtered.sort((a, b) {
+        final aFav = widget.favoriteIds.contains(a.id) ? 0 : 1;
+        final bFav = widget.favoriteIds.contains(b.id) ? 0 : 1;
+        if (aFav != bFav) return aFav.compareTo(bFav);
+        return a.title.compareTo(b.title);
+      });
+    } else if (sortMode == 4) {
+      filtered.sort((a, b) {
+        final aAudio = a.hasAudio ? 0 : 1;
+        final bAudio = b.hasAudio ? 0 : 1;
+        if (aAudio != bAudio) return aAudio.compareTo(bAudio);
+        return a.title.compareTo(b.title);
+      });
+    }
 
     return Column(
       children: [
@@ -5619,7 +6473,7 @@ class _IlahiListPageState extends State<IlahiListPage> {
               const SizedBox(width: 10),
               _SortButton(
                 mode: sortMode,
-                onTap: () => setState(() => sortMode = (sortMode + 1) % 3),
+                onSelected: (m) => setState(() => sortMode = m),
               ),
             ],
           ),
@@ -5682,6 +6536,8 @@ class _IlahiListPageState extends State<IlahiListPage> {
                               ilahi: ilahi,
                               isFavorite: isFav,
                               onFavoriteToggle: widget.onFavoriteToggle,
+                              playlist: filtered,
+                              favoriteIds: widget.favoriteIds,
                             ),
                           ),
                         );
@@ -5697,18 +6553,59 @@ class _IlahiListPageState extends State<IlahiListPage> {
 
 class _SortButton extends StatelessWidget {
   final int mode;
-  final VoidCallback onTap;
+  final Function(int) onSelected;
 
-  const _SortButton({required this.mode, required this.onTap});
+  const _SortButton({required this.mode, required this.onSelected});
+
+  static const _icons = [
+    Icons.sort_rounded,
+    Icons.arrow_downward_rounded,
+    Icons.arrow_upward_rounded,
+    Icons.star_rounded,
+    Icons.music_note_rounded,
+  ];
+  static const _labels = [
+    "Normal",
+    "A → Z",
+    "Z → A",
+    "Favoriler Önce",
+    "Sesli Olanlar Önce",
+  ];
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final icons = [Icons.sort_rounded, Icons.arrow_downward_rounded, Icons.arrow_upward_rounded];
-    final labels = ["Sırala", "A→Z", "Z→A"];
 
-    return GestureDetector(
-      onTap: onTap,
+    return PopupMenuButton<int>(
+      onSelected: onSelected,
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      itemBuilder: (context) => List.generate(_labels.length, (i) {
+        return PopupMenuItem<int>(
+          value: i,
+          child: Row(
+            children: [
+              Icon(
+                _icons[i],
+                size: 18,
+                color: i == mode ? AppColors.primary : Colors.grey,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _labels[i],
+                style: TextStyle(
+                  fontWeight: i == mode ? FontWeight.w700 : FontWeight.w400,
+                  color: i == mode ? AppColors.primary : null,
+                ),
+              ),
+              if (i == mode) ...[
+                const Spacer(),
+                const Icon(Icons.check_rounded, size: 16, color: AppColors.primary),
+              ],
+            ],
+          ),
+        );
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
@@ -5721,16 +6618,9 @@ class _SortButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icons[mode], size: 18, color: AppColors.primary),
+            Icon(_icons[mode], size: 18, color: AppColors.primary),
             const SizedBox(width: 5),
-            Text(
-              labels[mode],
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
-            ),
+            const Icon(Icons.expand_more_rounded, size: 16, color: AppColors.primary),
           ],
         ),
       ),
@@ -5852,6 +6742,96 @@ class _IlahiCard extends StatelessWidget {
 // ─────────────────────────────────────────────
 // FAVORİLER SAYFASI
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ÇALMA LİSTESİ — TÜM SESLİ İLAHİLER
+// ─────────────────────────────────────────────
+class AllHymnsPlaylistPage extends StatelessWidget {
+  final Set<int> favoriteIds;
+  final Function(int) onFavoriteToggle;
+
+  const AllHymnsPlaylistPage({
+    super.key,
+    required this.favoriteIds,
+    required this.onFavoriteToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final playlist = allIlahiler.where((i) => i.hasAudio).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Çalma Listesi"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: playlist.isEmpty
+          ? Center(
+              child: Text(
+                "Henüz sesli ilahi eklenmedi",
+                style: TextStyle(
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.queue_music_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        "${playlist.length} sesli ilahi",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: playlist.length,
+                    itemBuilder: (context, index) {
+                      final ilahi = playlist[index];
+                      final isFav = favoriteIds.contains(ilahi.id);
+                      return _IlahiCard(
+                        ilahi: ilahi,
+                        isFavorite: isFav,
+                        index: index + 1,
+                        onFavoriteToggle: () => onFavoriteToggle(ilahi.id),
+                        onTap: () {
+                          AudioService().stop();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => IlahiDetailPage(
+                                ilahi: ilahi,
+                                isFavorite: isFav,
+                                onFavoriteToggle: onFavoriteToggle,
+                                playlist: playlist,
+                                favoriteIds: favoriteIds,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
 class FavoritesPage extends StatelessWidget {
   final Set<int> favoriteIds;
   final Function(int) onFavoriteToggle;
@@ -5921,6 +6901,8 @@ class FavoritesPage extends StatelessWidget {
                   ilahi: ilahi,
                   isFavorite: true,
                   onFavoriteToggle: onFavoriteToggle,
+                  playlist: favorites,
+                  favoriteIds: favoriteIds,
                 ),
               ),
             );
@@ -5938,12 +6920,16 @@ class IlahiDetailPage extends StatefulWidget {
   final Ilahi ilahi;
   final bool isFavorite;
   final Function(int) onFavoriteToggle;
+  final List<Ilahi>? playlist;
+  final Set<int>? favoriteIds;
 
   const IlahiDetailPage({
     super.key,
     required this.ilahi,
     required this.isFavorite,
     required this.onFavoriteToggle,
+    this.playlist,
+    this.favoriteIds,
   });
 
   @override
@@ -5959,12 +6945,63 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   late bool _isFavorite;
+  late Ilahi _ilahi;
+  int? _audioSizeBytes;
+  Timer? _sleepTimer;
+  int? _sleepMinutesSet;
+  String? _lyricsText;
+  final GlobalKey _shareCardKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    _ilahi = widget.ilahi;
     _isFavorite = widget.isFavorite;
     _setupListeners();
+    _loadAudioSize();
+    _loadLyricsForShare();
+  }
+
+  Future<void> _loadLyricsForShare() async {
+    try {
+      final text = await rootBundle.loadString(_ilahi.lyricsPath);
+      if (mounted) setState(() => _lyricsText = text);
+    } catch (_) {
+      // Söz alınamazsa sessizce geç, paylaşım kartı başlıksız devam eder
+    }
+  }
+
+  void _setSleepTimer(int? minutes) {
+    _sleepTimer?.cancel();
+    setState(() => _sleepMinutesSet = minutes);
+    if (minutes != null) {
+      _sleepTimer = Timer(Duration(minutes: minutes), () async {
+        await _audio.player.pause();
+        if (mounted) setState(() => _sleepMinutesSet = null);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Uyku zamanlayıcısı: $minutes dakika sonra duracak"),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadAudioSize() async {
+    if (!_ilahi.hasAudio) return;
+    try {
+      final data = await rootBundle.load(_ilahi.audioPath);
+      if (mounted) setState(() => _audioSizeBytes = data.lengthInBytes);
+    } catch (_) {
+      // Boyut alınamazsa sessizce geç
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    final mb = bytes / (1024 * 1024);
+    return "${mb.toStringAsFixed(mb < 10 ? 2 : 1)} MB";
   }
 
   void _setupListeners() {
@@ -5988,11 +7025,71 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
           _isLoaded = false;
         }
       });
+
+      if (completed) {
+        _autoPlayNext();
+      }
     });
   }
 
+  int get _currentIndex {
+    final list = widget.playlist;
+    if (list == null) return -1;
+    return list.indexWhere((h) => h.id == _ilahi.id);
+  }
+
+  Ilahi? get _nextIlahi {
+    final list = widget.playlist;
+    if (list == null) return null;
+    final idx = _currentIndex;
+    if (idx == -1) return null;
+    for (var i = idx + 1; i < list.length; i++) {
+      if (list[i].hasAudio) return list[i];
+    }
+    return null;
+  }
+
+  Ilahi? get _previousIlahi {
+    final list = widget.playlist;
+    if (list == null) return null;
+    final idx = _currentIndex;
+    if (idx == -1) return null;
+    for (var i = idx - 1; i >= 0; i--) {
+      if (list[i].hasAudio) return list[i];
+    }
+    return null;
+  }
+
+  Future<void> _switchTo(Ilahi target, {bool autoPlay = true}) async {
+    await _audio.player.stop();
+    setState(() {
+      _ilahi = target;
+      _isFavorite = widget.favoriteIds?.contains(target.id) ?? false;
+      _isLoaded = false;
+      _isPlaying = false;
+      _position = Duration.zero;
+      _duration = Duration.zero;
+      _audioSizeBytes = null;
+      _lyricsText = null;
+    });
+    _loadAudioSize();
+    _loadLyricsForShare();
+    if (autoPlay && target.hasAudio) {
+      await _togglePlay();
+    }
+  }
+
+  Future<void> _autoPlayNext() async {
+    final next = _nextIlahi;
+    if (next == null) return;
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (mounted) {
+      await _switchTo(next, autoPlay: true);
+    }
+  }
+
   Future<void> _togglePlay() async {
-    if (!widget.ilahi.hasAudio) {
+    if (!_ilahi.hasAudio) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text("Bu ilahi için ses dosyası henüz eklenmemiş."),
@@ -6007,11 +7104,21 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
       if (!_isLoaded) {
         setState(() => _isLoading = true);
         // Önceki sesi durdur
-        if (_audio.currentPath != widget.ilahi.audioPath) {
+        if (_audio.currentPath != _ilahi.audioPath) {
           await _audio.player.stop();
         }
-        await _audio.player.setAsset(widget.ilahi.audioPath);
-        _audio.currentPath = widget.ilahi.audioPath;
+        await _audio.player.setAudioSource(
+          AudioSource.asset(
+            _ilahi.audioPath,
+            tag: MediaItem(
+              id: _ilahi.audioPath,
+              title: _ilahi.title,
+              artist: _ilahi.author,
+              album: "Bir Gönülden Bir Gönüle",
+            ),
+          ),
+        );
+        _audio.currentPath = _ilahi.audioPath;
         setState(() {
           _isLoaded = true;
           _isLoading = false;
@@ -6036,7 +7143,7 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Ses yüklenemedi: ${widget.ilahi.audioPath}"),
+            content: Text("Ses yüklenemedi: ${_ilahi.audioPath}"),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
@@ -6066,21 +7173,75 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
     return "$m:$s";
   }
 
+  void _shareIlahiTextOnly() {
+    Share.share(
+      "${_ilahi.title}\n\n"
+      "${_ilahi.author}\n\n"
+      "\"Bir Gönülden Bir Gönüle\" uygulamasında dinleyin ve okuyun:\n"
+      "https://play.google.com/store/apps/details?id=com.fktstudio.birgonuldenbirgonule",
+    );
+  }
+
+  Future<void> _shareIlahi() async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 60));
+      final boundary =
+          _shareCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        _shareIlahiTextOnly();
+        return;
+      }
+      final image = await boundary.toImage(pixelRatio: 2.5);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        _shareIlahiTextOnly();
+        return;
+      }
+      final pngBytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/ilahi_paylas.png');
+      await file.writeAsBytes(pngBytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: "${_ilahi.title} — Bir Gönülden Bir Gönüle",
+      );
+    } catch (_) {
+      _shareIlahiTextOnly();
+    }
+  }
+
+  String get _shareExcerpt {
+    if (_lyricsText == null) return "";
+    final lines = _lyricsText!
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    // İlk satır genelde başlığın tekrarı, atlanır
+    final body = lines.length > 1 ? lines.sublist(1) : lines;
+    return body.take(6).join('\n');
+  }
+
   @override
   void dispose() {
     // Sayfadan çıkınca sesi durdur
     _audio.player.pause();
+    _sleepTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final next = _nextIlahi;
+    final previous = _previousIlahi;
 
-    return Scaffold(
+    return Stack(
+      children: [
+      Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.ilahi.title,
+          _ilahi.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -6089,6 +7250,26 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          if (_ilahi.hasAudio)
+            PopupMenuButton<int?>(
+              icon: Icon(
+                _sleepMinutesSet != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+                color: _sleepMinutesSet != null ? AppColors.primary : null,
+              ),
+              onSelected: _setSleepTimer,
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: null, child: Text("Kapalı")),
+                const PopupMenuItem(value: 5, child: Text("5 dakika")),
+                const PopupMenuItem(value: 15, child: Text("15 dakika")),
+                const PopupMenuItem(value: 30, child: Text("30 dakika")),
+                const PopupMenuItem(value: 45, child: Text("45 dakika")),
+                const PopupMenuItem(value: 60, child: Text("60 dakika")),
+              ],
+            ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: _shareIlahi,
+          ),
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
@@ -6096,7 +7277,7 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
             ),
             onPressed: () {
               setState(() => _isFavorite = !_isFavorite);
-              widget.onFavoriteToggle(widget.ilahi.id);
+              widget.onFavoriteToggle(_ilahi.id);
             },
           ),
         ],
@@ -6105,9 +7286,9 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
           // Ses Oynatıcı Kartı
-          if (widget.ilahi.hasAudio) ...[
+          if (_ilahi.hasAudio) ...[
             _AudioPlayerCard(
-              ilahi: widget.ilahi,
+              ilahi: _ilahi,
               isPlaying: _isPlaying,
               isLoading: _isLoading,
               position: _position,
@@ -6118,6 +7299,11 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
               onSkipForward: _skipForward,
               formatDuration: _formatDuration,
               isDark: isDark,
+              onNext: next != null ? () => _switchTo(next) : null,
+              onPrevious: previous != null ? () => _switchTo(previous) : null,
+              nextTitle: next?.title,
+              previousTitle: previous?.title,
+              fileSizeLabel: _audioSizeBytes != null ? _formatFileSize(_audioSizeBytes!) : null,
             ),
             const SizedBox(height: 16),
           ] else ...[
@@ -6133,16 +7319,27 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
                 children: [
                   Icon(Icons.music_off_rounded, size: 18, color: Colors.amber.shade700),
                   const SizedBox(width: 10),
-                  Text(
-                    "Bu ilahi için ses dosyası henüz eklenmemiş.",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.amber.shade800,
+                  Expanded(
+                    child: Text(
+                      "Bu ilahi için ses dosyası henüz eklenmemiş.",
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.amber.shade800,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+            if (next != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: OutlinedButton.icon(
+                  onPressed: () => _switchTo(next),
+                  icon: const Icon(Icons.skip_next_rounded),
+                  label: Text("Sesli ilahiye geç: ${next.title}"),
+                ),
+              ),
           ],
 
           // Cilt / Yazar bilgisi
@@ -6157,11 +7354,11 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
             ),
             child: Row(
               children: [
-                _InfoChip(label: "Cilt ${widget.ilahi.ciltNo}", isDark: isDark),
+                _InfoChip(label: "Cilt ${_ilahi.ciltNo}", isDark: isDark),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    widget.ilahi.author,
+                    _ilahi.author,
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
@@ -6182,7 +7379,8 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: FutureBuilder<String>(
-              future: rootBundle.loadString(widget.ilahi.lyricsPath),
+              key: ValueKey(_ilahi.lyricsPath),
+              future: rootBundle.loadString(_ilahi.lyricsPath),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -6221,12 +7419,104 @@ class _IlahiDetailPageState extends State<IlahiDetailPage> {
           ),
         ],
       ),
+    ),
+      // Ekran dışında render edilen paylaşım kartı (görsel paylaşım için)
+      Positioned(
+        left: -9999,
+        top: 0,
+        child: RepaintBoundary(
+          key: _shareCardKey,
+          child: _buildShareCardWidget(),
+        ),
+      ),
+      ],
+    );
+  }
+
+  Widget _buildShareCardWidget() {
+    return Material(
+      child: Container(
+        width: 1080,
+        height: 1350,
+        padding: const EdgeInsets.all(64),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1B3A2A), Color(0xFF0F1923)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            ClipOval(
+              child: Image.asset(
+                "assets/images/bunyamin_efendi.jpg",
+                width: 140,
+                height: 140,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 140,
+                  height: 140,
+                  color: Colors.white24,
+                  child: const Icon(Icons.person, size: 70, color: Colors.white70),
+                ),
+              ),
+            ),
+            const SizedBox(height: 48),
+            Text(
+              _ilahi.title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 52,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 36),
+            Container(
+              width: 80,
+              height: 3,
+              color: const Color(0xFF4CAF50),
+            ),
+            const SizedBox(height: 36),
+            Text(
+              _shareExcerpt,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 32,
+                height: 1.7,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 56),
+            Text(
+              _ilahi.author,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF4CAF50),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              "Bir Gönülden Bir Gönüle",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: Colors.white54,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
-
-// ─────────────────────────────────────────────
-// MODERN SES OYNATICI KARTI
 // ─────────────────────────────────────────────
 class _AudioPlayerCard extends StatelessWidget {
   final Ilahi ilahi;
@@ -6240,6 +7530,11 @@ class _AudioPlayerCard extends StatelessWidget {
   final VoidCallback onSkipForward;
   final String Function(Duration) formatDuration;
   final bool isDark;
+  final VoidCallback? onNext;
+  final VoidCallback? onPrevious;
+  final String? nextTitle;
+  final String? previousTitle;
+  final String? fileSizeLabel;
 
   const _AudioPlayerCard({
     required this.ilahi,
@@ -6253,6 +7548,11 @@ class _AudioPlayerCard extends StatelessWidget {
     required this.onSkipForward,
     required this.formatDuration,
     required this.isDark,
+    this.onNext,
+    this.onPrevious,
+    this.nextTitle,
+    this.previousTitle,
+    this.fileSizeLabel,
   });
 
   @override
@@ -6305,12 +7605,38 @@ class _AudioPlayerCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      "Cilt ${ilahi.ciltNo}",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          "Cilt ${ilahi.ciltNo}",
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                          ),
+                        ),
+                        if (fileSizeLabel != null) ...[
+                          Text(
+                            "  •  ",
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                            ),
+                          ),
+                          Icon(
+                            Icons.sd_storage_rounded,
+                            size: 12,
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            fileSizeLabel!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -6425,6 +7751,54 @@ class _AudioPlayerCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onPrevious != null || onNext != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: onPrevious,
+                    icon: const Icon(Icons.skip_previous_rounded, size: 20),
+                    label: Text(
+                      previousTitle ?? "Önceki",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: onPrevious != null
+                          ? AppColors.primary
+                          : (isDark
+                              ? AppColors.darkTextSecondary.withOpacity(0.4)
+                              : AppColors.textSecondary.withOpacity(0.4)),
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: onNext,
+                    icon: const Icon(Icons.skip_next_rounded, size: 20),
+                    label: Text(
+                      nextTitle ?? "Sonraki",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: onNext != null
+                          ? AppColors.primary
+                          : (isDark
+                              ? AppColors.darkTextSecondary.withOpacity(0.4)
+                              : AppColors.textSecondary.withOpacity(0.4)),
+                      alignment: Alignment.centerRight,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

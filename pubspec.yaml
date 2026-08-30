@@ -4,7 +4,7 @@ description: Ilahi uygulamasi
 publish_to: 'none'
 
 
-version: 1.5.0+55
+version: 1.6.0+56
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -14,10 +14,15 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   just_audio: ^0.9.46
+  just_audio_background: any
   audio_session: ^0.1.21
   url_launcher: ^6.2.5
   share_plus: ^10.0.2
   shared_preferences: ^2.2.3
+  http: ^1.2.2
+  path_provider: ^2.1.5
+  flutter_local_notifications: any
+  timezone: any
 
 dev_dependencies:
   flutter_test:
